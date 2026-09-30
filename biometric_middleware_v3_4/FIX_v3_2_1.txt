@@ -1,0 +1,6 @@
+v3.2.1 fix:
+- Restored Database.get_setting/set_setting required by Phase 1 go-live protection.
+- Restored pending/mark_synced/mark_failed required by Odoo queue delivery.
+- Restored get_device_states/update_device_state used by main.py.
+- Added automatic additive migration for SQLite files created by earlier builds.
+- show_production_state now handles the state before the first production run.

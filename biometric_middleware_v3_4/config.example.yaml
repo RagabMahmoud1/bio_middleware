@@ -1,0 +1,64 @@
+app:
+  # Supervisor loop for queue retry / heartbeat.
+  poll_interval_seconds: 30
+  database_path: data\middleware.db
+  log_path: logs\middleware.log
+  log_level: INFO
+
+sync:
+  go_live_at: "2026-08-29 00:00:00"
+  employee_ids: []
+  batch_size: 5000
+  historical_backfill_enabled: false
+schedule:
+  # Daily batch sync. Windows Task Scheduler will call the middleware.
+  daily_time: "04:00"
+  retry_times:
+    - "05:00"
+    - "06:00"
+
+odoo:
+  enabled: false
+  base_url: "https://YOUR-ODOO-DOMAIN"
+  endpoint: "/biometric/api/v1/events"
+  allowed_employees_endpoint: "/biometric/api/v1/allowed-employees"
+  heartbeat_endpoint: "/biometric/api/v1/heartbeat"
+  api_token: "CHANGE_ME"
+  timeout_seconds: 20
+  verify_ssl: true
+
+devices:
+  - id: "zk_room_1"
+    enabled: true
+    type: "zkteco"
+    name: "ZKTeco MB1000 Room 1"
+    ip: "10.0.2.210"
+    port: 4370
+    comm_key: 0
+    timeout_seconds: 10
+    force_udp: false
+    poll_interval_seconds: 3600
+
+  - id: "hik_room_2"
+    enabled: true
+    type: "hikvision"
+    name: "Hikvision DS-K1T502DBFWX-C Room 2"
+    ip: "10.0.2.211"
+    scheme: "http"
+    port: 80
+    username: "admin"
+    password: "CHANGE_ME"
+    timeout_seconds: 15
+    verify_ssl: false
+    event_endpoint: "/ISAPI/AccessControl/AcsEvent?format=json"
+    event_major: 5
+    max_results: 200
+    only_employee_events: true
+    timezone_offset: "+03:00"
+    # Production collection uses a persisted cursor and re-reads this safety
+    # overlap on each successful cycle. SQLite event_key deduplication removes
+    # duplicates created by the overlap.
+    poll_interval_seconds: 300
+    cursor_overlap_minutes: 360
+    # Legacy fallback only; used if fetch_events() is called without a cursor.
+    lookback_minutes: 180
