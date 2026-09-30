@@ -37,6 +37,15 @@ class ReleaseFilesTests(unittest.TestCase):
         for name in required:
             self.assertTrue((ROOT / name).exists(), name)
 
+    def test_windows_service_uses_nssm(self):
+        install_text = (ROOT / "install_service.ps1").read_text(encoding="utf-8")
+        uninstall_text = (ROOT / "uninstall_service.ps1").read_text(encoding="utf-8")
+        self.assertIn("nssm", install_text.lower())
+        self.assertIn("nssm", uninstall_text.lower())
+        self.assertIn("-m app.main", install_text)
+        self.assertNotIn("windows_service.py", install_text)
+        self.assertNotIn("windows_service.py", uninstall_text)
+
     def test_odoo_xml_files_are_well_formed(self):
         files = [
             ODOO_MODULE / "views" / "biometric_device_views.xml",
