@@ -29,8 +29,8 @@
 |---|---|---|---|
 | BASE-01 | ERP Live: `erp.raidatalsharq.com` | موديولات `rgb_biometric_attendance_bridge` و`rgb_biometric_first_last_attendance` مثبتة؛ جهازان نشطان؛ 2,052 Raw Events وقت الفحص | Cron متوقف عمليًا؛ 60 Raw Events جديدة عند الفحص؛ التحقق من بقية أحداث اليوم |
 | BASE-02 | RSH Live: `rsh.raidatalsharq.com` | `hr_attendance` مثبت | موديولات البصمة وتهيئة الأجهزة والموظفين غير مثبتة/مكتملة |
-| BASE-03 | RSH Test: `test_RSH` | `rgb_biometric_attendance_bridge 16.0.1.4.1`؛ `rgb_biometric_first_last_attendance 16.0.1.5.1`؛ `rm_hr_attendance_sheet 16.0.16.1.1` مثبتة | لا أجهزة ولا Employee Mappings ولا Raw Events وقت الفحص؛ Cron التحويل غير مفعّل |
-| BASE-04 | RSH Test: `asg_biometric_first_last.timezone` | المفتاح موجود في `ir_config_parameter` | التحقق من القيمة الفعلية `Asia/Riyadh` |
+| BASE-03 | RSH Test: `test_RSH` | `rgb_biometric_attendance_bridge 16.0.1.4.1`؛ `rgb_biometric_first_last_attendance 16.0.1.5.1`؛ `rm_hr_attendance_sheet 16.0.16.1.1` مثبتة؛ SQL: 0 Devices / 0 Mappings / 0 Raw Events بتاريخ 2026-10-20 | تجهيز Device Records وMappings وAPI Token؛ Cron التحويل غير مفعّل |
+| BASE-04 | RSH Test: `asg_biometric_first_last.timezone` | تم تأكيد القيمة `Asia/Riyadh` عبر SQL | تأكيد نفس القيمة بشكل مستقل على RSH Live |
 | BASE-05 | RSH Test: `asg_biometric.api_token` | **المفتاح غير موجود** في آخر فحص | ضبط مفتاح سري مستقل على Test والتحقق من API دون عرضه في المخرجات |
 | BASE-06 | ERP Test: `test` | قاعدة مشابهة لنسخة ERP Live؛ `hr_attendance` موجود | تأكيد عنوان الوصول والخدمة المنفصلة؛ تثبيت موديولات البصمة واختبارها |
 | BASE-07 | Windows: `DESKTOP-FBHPKOK` | `RaidatBiometricConnector` تعمل تلقائيًا بواسطة NSSM / Python؛ timezone `Arab Standard Time` | لا تغير إعداداتها الحالية قبل اختبار النسخة الجديدة |
@@ -52,6 +52,16 @@
 - [ ] **TC-ENV-04** — تثبيت/تحديث `hr_attendance` و`rm_hr_attendance_sheet` و`rgb_biometric_attendance_bridge` و`rgb_biometric_first_last_attendance` على قواعد الاختبار المطلوبة.
 - [ ] **TC-ENV-05** — تأكيد عدم وجود موديول قديم آخر يعالج نفس Raw Events أو Attendance بصورة متعارضة.
 
+### 2.1.1 أداة تنفيذ تهيئة RSH Test — لا تُشغّل على Live
+
+- [x] **TC-BOOT-UNIT-01** — تمت كتابة `scripts/bootstrap_rsh_test_odoo.py` على فرع التطوير؛ 3 اختبارات محلية تثبت منع قواعد غير `test_RSH`، وإنشاء الجهازين وSecret Mode 0600، ومنع تغيير Device متعارض.
+- [ ] **TC-BOOT-RSH-01** — تشغيل الأداة داخل Odoo Shell الخاصة بـ`test_RSH` فقط بعد مراجعة الكود؛ إنشاء Device Records إذا لم تكن موجودة وتوليد Token Test فقط عند غيابه.
+- [ ] **TC-BOOT-RSH-02** — التحقق بعد التنفيذ من Device Count = 2، وToken Configured، وTimezone = `Asia/Riyadh`، وعدم تغيير Employee Mappings أو Cron.
+- [ ] **TC-BOOT-RSH-03** — حفظ API Token في ملف سري Mode 0600 وعدم إظهاره في Log أو إرسال قيمته في المحادثة؛ نسخه فقط إلى Runtime Test منعزل.
+- [ ] **TC-BOOT-RSH-04** — مراجعة Mapping مع HR وإضافة روابط موظفي RSH بعد تأكيد External User IDs الفعلية، من دون نسخ Employee Record IDs من ERP.
+
+**دليل التشغيل:** `scripts/bootstrap_rsh_test_odoo.py`، ويُنفّذ داخل Odoo Shell مع `env` على قاعدة `test_RSH` فقط، ولا يُشغّل بمجرد تحميل الملف. يجب تشغيله بواسطة مسؤول الاختبار مع Backup لقاعدة Test ومراجعة شركة RSH.
+
 ### 2.2 Odoo Configuration — لكل قاعدة على حدة
 
 - [ ] **TC-CFG-01** — قيمة `asg_biometric_first_last.timezone` تساوي `Asia/Riyadh` في ERP Test وRSH Test.
@@ -67,7 +77,7 @@
 
 ### 2.3 Middleware 3.6.0 — في Runtime منعزل عن خدمة Windows الحالية
 
-- [x] **TC-MW-UNIT-01** — 47 اختبارًا محليًا ناجحًا؛ يشمل 11 اختبارًا لمسارات تسليم ERP/RSH وتوافق المسار القديم (محاكاة وليست E2E).
+- [x] **TC-MW-UNIT-01** — 50 اختبارًا محليًا ناجحًا؛ يشمل 11 اختبارًا لمسارات تسليم ERP/RSH و3 اختبارات لأداة تهيئة RSH Test (محاكاة وليست E2E).
 - [ ] **TC-MW-01** — إنشاء Test Runtime وSQLite وConfig منفصلة كليًا عن Windows Production.
 - [ ] **TC-MW-02** — التحقق من `legacy_target_id=erp` ومن تطابق ERP target URL مع `odoo.base_url` قبل ترحيل حالات SQLite.
 - [ ] **TC-MW-03** — إثبات عدم إعادة إرسال سجلات ERP التي كانت `synced` عند ترقية السجل `event_deliveries`.
@@ -167,8 +177,8 @@
 
 | Test Case | Environment | Result | Evidence | Required Live Change | Live Verified |
 |---|---|---|---|---|---|
-| TC-MW-UNIT-01 | Local Dev | PASS — 47 tests | `python3 -m unittest discover -s tests -q` بتاريخ 2026-10-20 | نشر إصدار 3.6.0 فقط بعد نجاح E2E | No |
-| TC-CFG-01 (RSH timezone key) | RSH Test | PARTIAL — Key present, value not yet verified | SQL `ir_config_parameter` | تأكيد `Asia/Riyadh` على RSH Live | No |
+| TC-MW-UNIT-01 | Local Dev | PASS — 50 tests | `python3 -m unittest discover -s tests -q` بتاريخ 2026-10-20 | نشر إصدار 3.6.0 فقط بعد نجاح E2E | No |
+| TC-CFG-01 (RSH timezone key) | RSH Test | PASS — `Asia/Riyadh` verified | SQL `ir_config_parameter` بتاريخ 2026-10-20 | تأكيد `Asia/Riyadh` على RSH Live | No |
 | TC-CFG-02 (RSH API Token) | RSH Test | BLOCKED — Key absent | SQL `ir_config_parameter` بتاريخ 2026-10-20 | إنشاء Token مستقل على RSH Test ثم RSH Live | No |
 | TC-ENV-01 (ERP Test service) | ERP Test | BLOCKED — service not yet confirmed | فحوصات Service / dbfilter السابقة | N/A (Test prerequisite) | No |
 | TC-MW-09 (SQLite backup) | Windows | PARTIAL — Backup integrity verified, restore not tried | `integrity_check=ok`، `4336` events | Backup جديد + Restore Drill قبل Migration | No |
