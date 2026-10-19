@@ -12,6 +12,7 @@ from .adapters.zkteco import ZKTecoAdapter
 from .adapters.hikvision import HikvisionAdapter
 from .cursors import compute_fetch_start
 from .version import MIDDLEWARE_VERSION
+from .multi_target import MultiTargetRuntime
 
 _logger = logging.getLogger(__name__)
 
@@ -48,6 +49,8 @@ def get_devices(cfg, only_device=None):
 
 
 def send_pending(db, odoo):
+    if isinstance(odoo, MultiTargetRuntime):
+        return odoo.send_pending()
     if not odoo.enabled:
         pending = db.pending(limit=1)
         if pending:
@@ -133,6 +136,8 @@ def build_health_payload(db):
 
 
 def send_heartbeat(db, odoo):
+    if isinstance(odoo, MultiTargetRuntime):
+        return odoo.send_heartbeat()
     if not odoo.enabled:
         return True
     try:
@@ -236,6 +241,9 @@ def run_cycle(cfg, db, odoo, only_device=None, from_date_override=None):
             )
 
             new_count = db.add_events_bulk(filtered, chunk_size=batch_size)
+            if isinstance(odoo, MultiTargetRuntime):
+                # Also queues historical local records matched to a newly added target.
+                odoo.queue_captured(device["id"])
 
             if is_hikvision:
                 db.set_setting(
@@ -296,7 +304,8 @@ def main(args):
     cfg = load_config()
     setup_logging(cfg["app"]["log_path"], cfg["app"].get("log_level", "INFO"))
     db = Database(cfg["app"]["database_path"])
-    odoo = OdooClient(cfg.get("odoo", {}))
+    odoo = (MultiTargetRuntime(cfg, db) if "odoo_targets" in cfg
+            else OdooClient(cfg.get("odoo", {})))
 
     if args.version:
         print(MIDDLEWARE_VERSION)

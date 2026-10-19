@@ -1,0 +1,28 @@
+# Append these keys to the existing config.yaml; do not replace the current device settings.
+# IMPORTANT: this is a template, NOT a deployable production configuration.
+# Existing "odoo.base_url" must stay and match the ERP target exactly.
+legacy_target_id: erp
+odoo_targets:
+  - id: erp
+    enabled: true
+    base_url: "https://erp.raidatalsharq.com/"
+    endpoint: "/biometric/api/v1/events"
+    allowed_employees_endpoint: "/biometric/api/v1/allowed-employees"
+    heartbeat_endpoint: "/biometric/api/v1/heartbeat"
+    api_token: "COPY_EXISTING_ERP_TOKEN_LOCALLY"
+    timeout_seconds: 20
+    verify_ssl: true
+    device_ids: ["zk_room_1", "hik_room_2"]
+
+  - id: rsh
+    enabled: false  # NEVER enable before RSH Odoo bridge & mappings are verified
+    base_url: "https://rsh.raidatalsharq.com/"
+    endpoint: "/biometric/api/v1/events"
+    allowed_employees_endpoint: "/biometric/api/v1/allowed-employees"
+    heartbeat_endpoint: "/biometric/api/v1/heartbeat"
+    api_token: "SET_SEPARATE_RSH_TOKEN_LOCALLY"
+    timeout_seconds: 20
+    verify_ssl: true
+    device_ids: ["zk_room_1", "hik_room_2"]
+    # EXAMPLE ONLY; replace with approved RSH backfill start (KSA timezone).
+    start_at: "2026-10-19T00:00:00+03:00"

@@ -44,6 +44,26 @@ CREATE TABLE IF NOT EXISTS device_sync_state (
     last_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS event_deliveries (
+    event_id INTEGER NOT NULL,
+    target_id TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'pending',
+    sync_attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    synced_at TEXT,
+    PRIMARY KEY (event_id, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_deliveries_queue
+    ON event_deliveries(target_id, sync_status, event_id);
+
+CREATE TABLE IF NOT EXISTS target_device_state (
+    target_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    last_odoo_push_success TEXT,
+    PRIMARY KEY (target_id, device_id)
+);
+
 CREATE TABLE IF NOT EXISTS integration_state (
     key TEXT PRIMARY KEY,
     value TEXT,
@@ -487,3 +507,220 @@ class Database:
     # Backward-compatible name: transient errors remain pending.
     def mark_failed(self, ids, error):
         return self.mark_retry_error(ids, error)
+    def initialize_delivery_ledger(self, legacy_target_id):
+        """One-time, atomic migration of previous ERP acknowledgements."""
+        marker_key = "multi_target_legacy_seeded"
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM integration_state WHERE key = ?", (marker_key,)
+            ).fetchone()
+            if row:
+                if row[0] != legacy_target_id:
+                    raise ValueError("Legacy delivery target cannot be changed")
+                return
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO event_deliveries
+                    (event_id, target_id, sync_status, sync_attempts, last_error, synced_at)
+                SELECT id, ?, sync_status, sync_attempts, last_error, synced_at
+                FROM events
+                """,
+                (legacy_target_id,),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO target_device_state
+                    (target_id, device_id, last_odoo_push_success)
+                SELECT ?, device_id, last_odoo_push_success
+                FROM device_sync_state
+                """,
+                (legacy_target_id,),
+            )
+            conn.execute(
+                """
+                INSERT INTO integration_state(key, value, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (marker_key, legacy_target_id, now, now),
+            )
+
+    def queue_target_device(self, target_id, device_id, employee_codes, start_at=None):
+        """Create deliveries only for employees mapped to this specific Odoo target."""
+        codes = sorted(set(str(code).strip() for code in employee_codes if str(code).strip()))
+        if not codes:
+            return 0
+        start_cutoff = str(start_at)[:19] if start_at else "0000"
+        total = 0
+        # Keep comfortably below SQLite variable count limits.
+        with self.connect() as conn:
+            for index in range(0, len(codes), 500):
+                chunk = codes[index:index + 500]
+                placeholders = ",".join("?" for _ in chunk)
+                before = conn.total_changes
+                conn.execute(
+                    f"""
+                    INSERT OR IGNORE INTO event_deliveries(event_id, target_id, sync_status)
+                    SELECT id, ?, 'pending'
+                    FROM events
+                    WHERE device_id = ?
+                      AND employee_code IN ({placeholders})
+                      AND substr(event_time, 1, 19) >= ?
+                    """,
+                    [target_id, device_id, *chunk, start_cutoff],
+                )
+                total += conn.total_changes - before
+        return total
+
+    def pending_for_target(self, target_id, limit=200):
+        with self.connect() as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(row) for row in conn.execute(
+                """
+                SELECT e.*
+                FROM event_deliveries d
+                JOIN events e ON e.id = d.event_id
+                WHERE d.target_id = ? AND d.sync_status = 'pending'
+                ORDER BY e.id
+                LIMIT ?
+                """,
+                (target_id, int(limit)),
+            ).fetchall()]
+
+    def mark_target_delivery(self, target_id, ids, status, reason=None):
+        if not ids:
+            return
+        if status not in ("synced", "ignored"):
+            raise ValueError("Unsupported delivery status")
+        placeholders = ",".join("?" for _ in ids)
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                f"""
+                UPDATE event_deliveries
+                SET sync_status = ?, last_error = ?, synced_at = ?
+                WHERE target_id = ? AND event_id IN ({placeholders})
+                """,
+                [status, reason, now, target_id, *ids],
+            )
+            # Mirror the legacy ERP target only, preserving safe downgrade semantics.
+            legacy = conn.execute(
+                "SELECT value FROM integration_state WHERE key = 'multi_target_legacy_seeded'"
+            ).fetchone()
+            if legacy and legacy[0] == target_id:
+                conn.execute(
+                    f"""
+                    UPDATE events SET sync_status = ?, last_error = ?, synced_at = ?
+                    WHERE id IN ({placeholders})
+                    """,
+                    [status, reason, now, *ids],
+                )
+
+    def mark_target_retry(self, target_id, ids, error):
+        if not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        with self.connect() as conn:
+            conn.execute(
+                f"""
+                UPDATE event_deliveries
+                SET sync_attempts = sync_attempts + 1, last_error = ?
+                WHERE target_id = ? AND event_id IN ({placeholders})
+                  AND sync_status = 'pending'
+                """,
+                [str(error)[:2000], target_id, *ids],
+            )
+
+    def mark_target_rejected(self, target_id, items):
+        if not items:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            for item in items:
+                conn.execute(
+                    """
+                    UPDATE event_deliveries
+                    SET sync_status = 'failed',
+                        sync_attempts = sync_attempts + 1,
+                        synced_at = ?, last_error = ?
+                    WHERE target_id = ? AND event_id = ?
+                    """,
+                    (now, str(item.get("error", "rejected"))[:2000],
+                     target_id, int(item["id"])),
+                )
+            legacy = conn.execute(
+                "SELECT value FROM integration_state WHERE key = 'multi_target_legacy_seeded'"
+            ).fetchone()
+            if legacy and legacy[0] == target_id:
+                conn.executemany(
+                    """
+                    UPDATE events SET sync_status = 'failed',
+                        synced_at = ?, last_error = ?, sync_attempts = sync_attempts + 1
+                    WHERE id = ?
+                    """,
+                    [(now, str(item.get("error", "rejected"))[:2000], int(item["id"]))
+                     for item in items],
+                )
+
+    def mark_target_push_success(self, target_id, ids):
+        if not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as conn:
+            devices = conn.execute(
+                f"SELECT DISTINCT device_id FROM events WHERE id IN ({placeholders})",
+                list(ids),
+            ).fetchall()
+            conn.executemany(
+                """
+                INSERT INTO target_device_state
+                    (target_id, device_id, last_odoo_push_success)
+                VALUES (?, ?, ?)
+                ON CONFLICT(target_id, device_id) DO UPDATE
+                SET last_odoo_push_success = excluded.last_odoo_push_success
+                """,
+                [(target_id, row[0], now) for row in devices],
+            )
+            legacy = conn.execute(
+                "SELECT value FROM integration_state WHERE key = 'multi_target_legacy_seeded'"
+            ).fetchone()
+            if legacy and legacy[0] == target_id:
+                conn.executemany(
+                    """
+                    UPDATE device_sync_state SET last_odoo_push_success = ?
+                    WHERE device_id = ?
+                    """,
+                    [(now, row[0]) for row in devices],
+                )
+
+    def target_last_push(self, target_id, device_id):
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT last_odoo_push_success FROM target_device_state
+                WHERE target_id = ? AND device_id = ?
+                """,
+                (target_id, device_id),
+            ).fetchone()
+            return row[0] if row else None
+
+    def target_queue_stats(self, target_id, device_id=None):
+        conditions = "WHERE d.target_id = ?"
+        args = [target_id]
+        if device_id is not None:
+            conditions += " AND e.device_id = ?"
+            args.append(device_id)
+        with self.connect() as conn:
+            results = conn.execute(
+                f"""
+                SELECT d.sync_status, COUNT(*)
+                FROM event_deliveries d JOIN events e ON e.id = d.event_id
+                {conditions}
+                GROUP BY d.sync_status
+                """,
+                args,
+            ).fetchall()
+        counts = dict(results)
+        return {status: counts.get(status, 0)
+                for status in ("pending", "failed", "ignored", "synced")}
