@@ -56,7 +56,7 @@
 
 - [x] **TC-BOOT-UNIT-01** — تمت كتابة `scripts/bootstrap_rsh_test_odoo.py` على فرع التطوير؛ 3 اختبارات محلية تثبت منع قواعد غير `test_RSH`، وإنشاء الجهازين وSecret Mode 0600، ومنع تغيير Device متعارض.
 - [x] **TC-BOOT-RSH-01** — تم التشغيل في Odoo Shell الخاصة بـ`test_RSH` بتاريخ 2026-10-20 بعد تحقق SHA/Git Hash للملف (`6522374d4cb7895f94e20d428820f492b3aa1f05`). المخرجات أكدت إنشاء `zk_room_1` و`hik_room_2` وToken Test خاص، مع عدم إنشاء Mappings وعدم تعديل Cron.
-- [ ] **TC-BOOT-RSH-02** — التحقق بعد التنفيذ من Device Count = 2، وToken Configured، وTimezone = `Asia/Riyadh`، وعدم تغيير Employee Mappings أو Cron.
+- [x] **TC-BOOT-RSH-02** — تحقق مستقل من Odoo Shell: جهازان (`hik_room_2` و`zk_room_1`) نشطان بـ`raw_only`، وToken مضبوط بطول مناسب، وEmployee Mappings = 0؛ قيمة `Asia/Riyadh` مثبتة بقراءة SQL سابقة؛ Cron لم يُعدّل بواسطة أداة التهيئة. مطلوب إعادة التحقق من Cron قبل الاختبار التشغيلي.
 - [ ] **TC-BOOT-RSH-03** — حفظ API Token في ملف سري Mode 0600 وعدم إظهاره في Log أو إرسال قيمته في المحادثة؛ نسخه فقط إلى Runtime Test منعزل.
 - [ ] **TC-BOOT-RSH-04** — مراجعة Mapping مع HR وإضافة روابط موظفي RSH بعد تأكيد External User IDs الفعلية، من دون نسخ Employee Record IDs من ERP.
 
