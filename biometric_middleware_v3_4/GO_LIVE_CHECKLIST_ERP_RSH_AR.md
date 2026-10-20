@@ -36,7 +36,7 @@
 | BASE-07 | Windows: `DESKTOP-FBHPKOK` | `RaidatBiometricConnector` تعمل تلقائيًا بواسطة NSSM / Python؛ timezone `Arab Standard Time` | لا تغير إعداداتها الحالية قبل اختبار النسخة الجديدة |
 | BASE-08 | SQLite الحالية | 4,336 حدثًا؛ 2,052 `synced`؛ 2,284 `ignored`؛ 0 `pending` و0 `failed` وقت الفحص | فحص ملاءمة الأحداث المتجاهلة لتسليم RSH، وفحص أحداث لم تُخزَّن أصلًا |
 | BASE-09 | SQLite Backup | `C:\RaidatBiometric\backups\middleware_20261020_020225.db`؛ `PRAGMA integrity_check = ok`؛ الأعداد مطابقة | اختبار Restoration عمليًا على نسخة معزولة؛ إنشاء Backup جديد قبل التحويل الفعلي |
-| BASE-10 | Middleware Dev | `feature/biometric-multi-target`؛ `3.6.0`؛ 96 اختبارًا محليًا ناجحًا | اختبار End-to-End على Test؛ عدم نشره على Windows Production الآن |
+| BASE-10 | Middleware Dev | `feature/biometric-multi-target`؛ `3.6.0`؛ 100 اختبار محلي ناجح | اختبار End-to-End على Test؛ عدم نشره على Windows Production الآن |
 | BASE-11 | Odoo Live Cron | `max_cron_threads=1`؛ عملية الإنتاج تُظهر خيطين مقابل 3 في Test؛ 28 مهمة متأخرة في ERP و26 في RSH | فحص/إصلاح Cron ضمن نافذة صيانة معتمدة؛ مراجعة قواعد الإنتاج الأخرى |
 | BASE-12 | تشغيل المهام الموروثة | `Synced Attendance` موجودة على ERP/RSH؛ `EDI` لديها خطأ XML مستقل على ERP | التحقق من وظيفة `Synced Attendance` ومنع تعارض المعالجة؛ مراجعة المهام المالية قبل Restart |
 
@@ -88,9 +88,9 @@
 
 - [x] **TC-EVENTS-PROBE-DEV-01** — 2026-10-20: أُعدّ `scripts/check_rsh_test_events_api_safe.py` مع 4 Unit Tests؛ يفحص `POST /biometric/api/v1/events` على TEST فقط عبر `401` للرمز الخاطئ و`400` لـInvalid Payload و`ignored:unknown_employee` لحدث اصطناعي بمعرّف موظف غير موجود؛ لا يرسل Events لموظفين حقيقيين، ولا يطلب Processing. ينتظر اختبار HTTP فعليًا.
 - [x] **TC-EVENTS-PROBE-HTTP-01** — 2026-10-20: المستخدم نزّل وتحقق من Git Hash `d1e28347a3c845770b4a5e365bd863b8a318a327`، ثم شغّل `check_rsh_test_events_api_safe.py` على `test_RSH`. HTTP 401 لـWrong Token؛ HTTP 400 لـInvalid List؛ إعادة إرسال حدث اصطناعي غير مربوط مرتين كانت HTTP 200 مع `ignored:unknown_employee` في المرتين؛ النتيجة `PASS`. **هذا إثبات HTTP فعلي، ولم يختبر Event Accepted أو إنشاء Attendance.**
-- [ ] **TC-EVENTS-PROBE-ORM-01** — إثبات عدم إنشاء أي Raw Event من محاولتي `ignored` بمراجعة ORM بعد الاختبار؛ لم يُتحقق من العدد قبل الاختبار في مخرجات المستخدم، لذلك يلزم تدقيق حالة Test الحالية فقط.
+- [x] **TC-EVENTS-PROBE-ORM-01** — تأكدت قاعدة `test_RSH` مباشرة قبل تشغيل E2E من `RAW_EVENTS_BEFORE: 0` بعد اختبار `ignored` مرتين، ما يثبت عدم وجود Raw Events مخزّنة حتى تلك اللحظة. بعد ذلك أُنشئت 3 Raw Events اصطناعية عمدًا أثناء E2E؛ لا تستخدم عدد 0 بعد الاختبار.
 - [x] **TC-E2E-SYNTH-DEV-01** — 2026-10-20: تم تطوير `scripts/run_rsh_test_synthetic_e2e.py` لعينة Test معزولة، مع 7 Unit Tests إضافية؛ إجمالي الاختبارات المحلية 96 ناجحًا. السكربت يمنع قواعد غير `test_RSH`، ويرفض إذا كان فيها أي Raw Events موجودة أو أجهزة اختبار بأسماء محجوزة، ويُنشئ موظفًا اصطناعيًا وجهازين اصطناعيين مختلفين عن `zk_room_1/hik_room_2`، وMapping اختبارية لهما فقط. يرسل 3 أحداث اختبارية عبر HTTP محلي `127.0.0.1:8070`، ويعيد إرسالها لفحص Idempotency، ثم يُحوّل يومًا مكتملًا من جهازين إلى Attendance واحدة ويتأكد أن يوم البصمة الواحدة لا يُنشئ Attendance؛ يعيد المعالجة دون Duplication. يحفظ Evidence داخل `test_RSH` ولا يغيّر Cron. **لم يُشغّل على test_RSH فعليًا بعد.**
-- [ ] **TC-E2E-SYNTH-01** — تشغيل السكربت فعليًا على RSH Test فقط بعد التأكد من الـDatabase والـGit Hash والملف الخاص. التحقق من 3 HTTP Accepted + Raw Events + Attendance واحدة + Single Punch Error + Reprocessing Idempotency؛ ترحيل نتائج E2E إلى Checklist، مع عدم اعتبار هذا اختبارًا لربط الموظفين الحقيقيين أو Middleware Windows متعدد الأهداف.
+- [x] **TC-E2E-SYNTH-01** — **PASS بتاريخ 2026-10-20 على `test_RSH` فعليًا** وفق مخرجات Odoo Shell التي أرسلها المستخدم: قبل الاختبار `RAW_EVENTS_BEFORE=0`، ثم إنشاء موظف وجهازين اصطناعيين، HTTP Accepted لثلاث بصمات، إعادة الإرسال ACK دون تكرار، Attendance واحدة ليوم مكتمل ببصمتي 08:15 و17:15 `Asia/Riyadh` على جهازين مختلفين، يوم ببصمة واحدة `FIRST_LAST_SINGLE_PUNCH` بلا Attendance، إعادة المعالجة بلا تكرار. بقيت Mappings للجهازين الحقيقيين في Test: ZK=19 وHik=46. أُبقيت السجلات الاصطناعية في `test_RSH` كدليل؛ لم يُغيّر السكربت Cron أو خدمة Windows أو Live. **لا يعني هذا نجاح Middleware Multi-Target أو اختبار ERP Test؛ ولا إثبات صحة ربط الموظفين الحقيقيين بالاسم.**
 
 ### 2.2 Odoo Configuration — لكل قاعدة على حدة
 
@@ -107,7 +107,8 @@
 
 ### 2.3 Middleware 3.6.0 — في Runtime منعزل عن خدمة Windows الحالية
 
-- [x] **TC-MW-UNIT-01** — 79 اختبارًا محليًا ناجحًا؛ يشمل اختبارات مسارات تسليم ERP/RSH وأداة تهيئة RSH Test وقالب Employee Mapping الخاص بالاختبار (محاكاة وليست E2E).
+- [x] **TC-MW-UNIT-01** — 100 اختبار محلي ناجح؛ يشمل اختبارات مسارات تسليم ERP/RSH وأداة تهيئة RSH Test وقالب Employee Mapping الخاص بالاختبار (محاكاة وليست E2E).
+- [x] **TC-MW-ISO-01** — 2026-10-20: أضيفت 4 اختبارات `tests/test_multi_target_isolated_e2e.py` ونُفذت على بيئة التطوير باستخدام **SQLite حقيقية مؤقتة** + أحداث أجهزة اصطناعية + Odoo Clients وهمية (`.invalid` بلا HTTP حقيقي). PASS: فصل موظفي ERP وRSH والمشتركين على جهازين؛ إعادة Poll بلا تكرار؛ فشل تسليم RSH لا يعكس إقرار ERP مع حفظ Pending حتى إعادة فتح SQLite واستئناف التسليم؛ تعطل Mapping API يمنع Hikvision Cursor؛ ترحيل سجلات ERP القديمة `synced` بلا Replay إلى ERP. إجمالي Suite أصبح **100 tests PASS**. لم يُختبر اتصال Windows الحقيقي أو قاعدة ERP Test بعد.
 - [ ] **TC-MW-01** — إنشاء Test Runtime وSQLite وConfig منفصلة كليًا عن Windows Production.
 - [ ] **TC-MW-02** — التحقق من `legacy_target_id=erp` ومن تطابق ERP target URL مع `odoo.base_url` قبل ترحيل حالات SQLite.
 - [ ] **TC-MW-03** — إثبات عدم إعادة إرسال سجلات ERP التي كانت `synced` عند ترقية السجل `event_deliveries`.
@@ -207,7 +208,7 @@
 
 | Test Case | Environment | Result | Evidence | Required Live Change | Live Verified |
 |---|---|---|---|---|---|
-| TC-MW-UNIT-01 | Local Dev | PASS — 96 tests | `python3 -m unittest discover -s tests -q` بتاريخ 2026-10-20 | نشر إصدار 3.6.0 فقط بعد نجاح E2E | No |
+| TC-MW-UNIT-01 | Local Dev | PASS — 100 tests | `python3 -m unittest discover -s tests -q` بتاريخ 2026-10-20 | نشر إصدار 3.6.0 فقط بعد نجاح E2E | No |
 | TC-CFG-01 (RSH timezone key) | RSH Test | PASS — `Asia/Riyadh` verified | SQL `ir_config_parameter` بتاريخ 2026-10-20 | تأكيد `Asia/Riyadh` على RSH Live | No |
 | TC-CFG-02 (RSH API Token) | RSH Test | PARTIAL — generated by Test bootstrap; endpoint not yet verified | Odoo Shell output بتاريخ 2026-10-20 | إنشاء Token مستقل على RSH Test ثم RSH Live | No |
 | TC-BOOT-RSH-01 | RSH Test | PASS — bootstrap script ran, 2 devices and token reported | Odoo Shell / Git Hash 6522374d4c بتاريخ 2026-10-20 | إعادة التهيئة المعتمدة على RSH Live بعد Test E2E فقط | No |
