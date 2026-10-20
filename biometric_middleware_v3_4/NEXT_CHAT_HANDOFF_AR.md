@@ -2,11 +2,11 @@
 
 # تسليم المحادثة الجديدة — Raidat Biometric ERP / RSH
 
-**تاريخ التحديث:** 2026-10-20  
-**المشروع:** raidat  
-**GitHub:** `https://github.com/RagabMahmoud1/bio_middleware`  
-**فرع التطوير المعتمد:** `feature/biometric-multi-target`  
-**حالة النشر:** لم تتم ترقية أي Production Runtime أو تغيير خدمة Windows؛ **Go-Live لم يحدث**.  
+**تاريخ التحديث:** 2026-10-20
+**المشروع:** raidat
+**GitHub:** `https://github.com/RagabMahmoud1/bio_middleware`
+**فرع التطوير المعتمد:** `feature/biometric-multi-target`
+**حالة النشر:** لم تتم ترقية أي Production Runtime أو تغيير خدمة Windows؛ **Go-Live لم يحدث**.
 **الأولوية:** تجهيز ERP Test المنفصل، اختبار Middleware على بيئتي Test، ثم Preflight/Backup/Restore/Go-No-Go. المستخدم يريد الإنجاز سريعًا (نافذة مستهدفة ~ساعة وقت الطلب)، لكن **لا تُختصر شروط أمان Production**.
 
 ## 1. آخر اكتشاف على السيرفر — أهم ما تبدأ به المحادثة الجديدة
