@@ -124,4 +124,17 @@ biometric_middleware_v3_4/tests/test_multi_target_isolated_e2e.py
 - المستخدم يريد سرعة، تعليمات قصيرة، عمل فعلي بالأدوات بدل تدوير خطوات يدوية لا لزوم لها. وثّق بدقة الفرق بين Mock PASS وHTTP Test PASS وLive verified.
 - بيانات Windows الخاصة، أسماء الموظفين، أرقام شخصيّة، رموز ومفاتيح API: **لا تُلصق في المحادثة أو Git**.
 
+
+## ملحق تنفيذ المحادثة الحالية — بعد Commit 1a6d164
+
+- تم التأكد أن المستودع المحلي بالفعل على `feature/biometric-multi-target` عند `1a6d164a69b714d1d388b8e192049dc9ed2560cf` عند بدء العمل؛ لم تُعد اختبارات 103 القديمة.
+- **مانع صلاحية اتصال عملي:** `mcp__rajab_work__ssh_exec` يصل لجهاز التطوير المحلي `/home/ragab` (وليس سيرفر Odoo `vmi1260282`). أوامر الوصول للسيرفر عبر `ssh` ليست ضمن allowlist لدى الأداة. لا تستخدم Python أو أوامر التفافية لكسر سياسة MCP. لذلك لم يتم إنشاء/تعديل خدمة Test أو تثبيت موديولات في السيرفر.
+- فُحصت Manifest النسخة المحلية: `rgb_biometric_attendance_bridge` رقم `16.0.1.4.1`، و`rgb_biometric_first_last_attendance` رقم `16.0.1.5.1`. تغييرات BOQ والفواتير الموجودة في مستودع أودو المحلي لم تُمس.
+- تمت إضافة أداة فحص Server قراءة فقط: `scripts/audit_dual_odoo_test_readonly.py`، مع 4 اختبارات محلية جديدة PASS. يجب تشغيلها **على سيرفر العميل**؛ التشغيل على اللابتوب ليس دليلًا عن السيرفر.
+- تمت إضافة أداة Middleware HTTP صناعية حقيقية: `scripts/run_dual_target_http_synthetic_e2e.py`، مع 6 اختبارات محلية جديدة PASS، ولا تتصل بأي جهاز فعلي أو Production. تفحص Test Config قبل POST، وتحفظ حالة SQLite في دليل مؤقت، وتختبر فشل RSH من خلال loopback غير متاح، وعودة Pending/منع ERP Replay.
+- تمت إضافة أداة فحص Attendance موجهة: `scripts/verify_dual_target_http_attendance.py` مع اختبارين محليين PASS، دون تشغيل أي Global Cron.
+- **مهم:** `Database.make_event_key` يحوّل حقول الحدث إلى SHA256، ولذلك يستخدم كلٌّ من سكربت HTTP وVerifier مفاتيح Hash محسوبة بشكل متطابق من أحداث صناعية ثابتة يوم `2026-10-17`؛ اختبار تطابق المفاتيح PASS. لا تخلطها مع مفاتيح `RSH_E2E_SYNTH_` السابقة.
+- دليل الخطوات الجديد `ERP_TEST_ISOLATION_RUNBOOK_AR.md`، وتحديث `GO_LIVE_CHECKLIST_ERP_RSH_AR.md` بند 7. لا تدّع REAL HTTP PASS أو Install PASS؛ كلاهما BLOCKED حتى اتصال مباشر بسيرفر Linux وتهيئة ERP Test مستقلة.
+- **لا Go-Live** قبل HTTP Test، Restore Drill، اعتماد HR لربط الأجهزة، ومراجعة إنتاج Cron.
+
 </div>
